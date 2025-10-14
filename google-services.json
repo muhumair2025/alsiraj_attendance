@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "173506297069",
+    "project_id": "alsiraj-attendance",
+    "storage_bucket": "alsiraj-attendance.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:173506297069:android:f9858376771ba62865a0e4",
+        "android_client_info": {
+          "package_name": "sssatechs.alsirajattendance.com.alsiraj_attendance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIiN7f-61Tdfq5EtIwyNX-1DjNGuwH194"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
