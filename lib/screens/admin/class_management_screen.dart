@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/course_model.dart';
 import '../../models/class_model.dart';
 import '../../providers/course_provider.dart';
@@ -19,6 +20,107 @@ class ClassManagementScreen extends StatefulWidget {
 
 class _ClassManagementScreenState extends State<ClassManagementScreen> {
   final FirestoreService _firestoreService = FirestoreService();
+  
+  // Sorting options
+  String _currentSortOption = 'newest_first';
+  List<ClassModel> _sortedClasses = [];
+  
+  // Sort options
+  final Map<String, String> _sortOptions = {
+    'newest_first': 'Newest First',
+    'oldest_first': 'Oldest First',
+    'class_name_asc': 'Class Name (A-Z)',
+    'class_name_desc': 'Class Name (Z-A)',
+    'start_time_asc': 'Start Time (Earliest)',
+    'start_time_desc': 'Start Time (Latest)',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSortPreference();
+  }
+
+  // Load saved sort preference
+  Future<void> _loadSortPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedSort = prefs.getString('class_sort_preference') ?? 'newest_first';
+    setState(() {
+      _currentSortOption = savedSort;
+    });
+  }
+
+  // Save sort preference
+  Future<void> _saveSortPreference(String sortOption) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('class_sort_preference', sortOption);
+  }
+
+  // Sort classes based on selected option
+  List<ClassModel> _sortClasses(List<ClassModel> classes) {
+    final sortedClasses = List<ClassModel>.from(classes);
+    
+    switch (_currentSortOption) {
+      case 'newest_first':
+        sortedClasses.sort((a, b) => b.startTime.compareTo(a.startTime));
+        break;
+      case 'oldest_first':
+        sortedClasses.sort((a, b) => a.startTime.compareTo(b.startTime));
+        break;
+      case 'class_name_asc':
+        sortedClasses.sort((a, b) => a.className.compareTo(b.className));
+        break;
+      case 'class_name_desc':
+        sortedClasses.sort((a, b) => b.className.compareTo(a.className));
+        break;
+      case 'start_time_asc':
+        sortedClasses.sort((a, b) => a.startTime.compareTo(b.startTime));
+        break;
+      case 'start_time_desc':
+        sortedClasses.sort((a, b) => b.startTime.compareTo(a.startTime));
+        break;
+    }
+    
+    return sortedClasses;
+  }
+
+  // Show sort options dialog
+  void _showSortOptions() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+        ),
+        title: const Text('Sort Classes'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _sortOptions.entries.map((entry) {
+            return RadioListTile<String>(
+              title: Text(entry.value),
+              value: entry.key,
+              groupValue: _currentSortOption,
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _currentSortOption = value;
+                  });
+                  _saveSortPreference(value);
+                  Navigator.pop(context);
+                }
+              },
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showCreateClassDialog() {
     final formKey = GlobalKey<FormState>();
@@ -368,6 +470,13 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.course.name),
+        actions: [
+          IconButton(
+            onPressed: _showSortOptions,
+            icon: const Icon(Icons.sort),
+            tooltip: 'Sort Classes',
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateClassDialog,
@@ -408,11 +517,13 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
           }
 
           final classes = snapshot.data!;
+          final sortedClasses = _sortClasses(classes);
+          
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: classes.length,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            itemCount: sortedClasses.length,
             itemBuilder: (context, index) {
-              final classModel = classes[index];
+              final classModel = sortedClasses[index];
               return _buildClassCard(classModel);
             },
           );
@@ -423,99 +534,151 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
 
   Widget _buildClassCard(ClassModel classModel) {
     final isAttendanceOpen = classModel.isAttendanceOpen();
+    final now = DateTime.now();
+    final isPast = classModel.endTime.isBefore(now);
+    final isUpcoming = classModel.startTime.isAfter(now);
+    
+    // Determine status
+    String status;
+    Color statusColor;
+    if (isPast) {
+      status = 'Past';
+      statusColor = Colors.grey.shade600;
+    } else if (isUpcoming) {
+      status = 'Upcoming';
+      statusColor = Colors.blue.shade600;
+    } else {
+      status = 'Active';
+      statusColor = Colors.green.shade600;
+    }
     
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 1,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.zero,
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: isAttendanceOpen ? const Color(0xFF066330) : Colors.grey,
-            borderRadius: BorderRadius.zero,
-          ),
-          child: const Icon(Icons.class_, color: Colors.white),
-        ),
-        title: Text(
-          classModel.className,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        subtitle: Column(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
+            // Header row with class name and status
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.play_arrow, size: 16, color: Color(0xFF066330)),
-                const SizedBox(width: 4),
-                Text(
-                  DateFormat('MMM dd, yyyy - hh:mm a').format(classModel.startTime),
-                  style: const TextStyle(fontSize: 13),
+                Expanded(
+                  child: Text(
+                    classModel.className,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    border: Border.all(color: statusColor, width: 1),
+                    borderRadius: BorderRadius.zero,
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
+            
+            // Date and time row
             Row(
               children: [
-                const Icon(Icons.stop, size: 16, color: Colors.red),
-                const SizedBox(width: 4),
                 Text(
-                  DateFormat('MMM dd, yyyy - hh:mm a').format(classModel.endTime),
-                  style: const TextStyle(fontSize: 13),
+                  DateFormat('MMM dd, yyyy').format(classModel.startTime),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '•',
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${DateFormat('hh:mm a').format(classModel.startTime)} - ${DateFormat('hh:mm a').format(classModel.endTime)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: isAttendanceOpen ? const Color(0xFF066330).withValues(alpha: 0.1) : Colors.grey.shade100,
-                border: Border.all(
-                  color: isAttendanceOpen ? const Color(0xFF066330) : Colors.grey,
-                  width: 1,
+            
+            // Attendance status row
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: isAttendanceOpen ? Colors.green : Colors.grey,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-                borderRadius: BorderRadius.zero,
-              ),
-              child: Text(
-                isAttendanceOpen ? 'Attendance Open' : 'Attendance Closed',
-                style: TextStyle(
-                  color: isAttendanceOpen ? const Color(0xFF066330) : Colors.grey.shade700,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(width: 6),
+                Text(
+                  isAttendanceOpen ? 'Attendance Open' : 'Attendance Closed',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isAttendanceOpen ? Colors.green.shade700 : Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
+                const Spacer(),
+                PopupMenuButton(
+                  icon: Icon(
+                    Icons.more_vert,
+                    size: 18,
+                    color: Colors.grey.shade600,
+                  ),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.zero,
+                  ),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete, color: Colors.red, size: 18),
+                          SizedBox(width: 8),
+                          Text('Delete', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      _showDeleteConfirmation(classModel);
+                    }
+                  },
+                ),
+              ],
             ),
           ],
-        ),
-        trailing: PopupMenuButton(
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
-          ),
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
-          ],
-          onSelected: (value) {
-            if (value == 'delete') {
-              _showDeleteConfirmation(classModel);
-            }
-          },
         ),
       ),
     );

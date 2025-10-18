@@ -10,6 +10,8 @@ import '../../providers/attendance_provider.dart';
 import '../../models/course_model.dart';
 import '../../models/class_model.dart';
 import '../../services/firestore_service.dart';
+import '../../services/cache_service.dart';
+import '../../services/notification_service.dart';
 import '../auth/login_screen.dart';
 import '../common/profile_screen.dart';
 import 'course_selection_screen.dart';
@@ -23,6 +25,8 @@ class StudentDashboard extends StatefulWidget {
 
 class _StudentDashboardState extends State<StudentDashboard> {
   final FirestoreService _firestoreService = FirestoreService();
+  final CacheService _cacheService = CacheService();
+  final NotificationService _notificationService = NotificationService();
   final Map<String, bool> _attendanceStatus = {};
   bool _hasLoadedAttendanceStatus = false;
   bool _isRefreshing = false;
@@ -59,6 +63,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
       
       // Start periodic refresh timer for dynamic updates
       _startPeriodicRefresh();
+      
+      // Cache attendance schedules and schedule offline notifications
+      _cacheAttendanceSchedulesAndNotifications();
     });
   }
 
@@ -125,6 +132,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
         _attendanceStatus.clear();
         await _loadAttendanceStatus();
         
+        // Cache attendance schedules (force refresh on manual refresh)
+        await _forceCacheAttendanceSchedules();
+        
         // Update last refreshed time
         _lastRefreshed = DateTime.now();
       }
@@ -143,6 +153,60 @@ class _StudentDashboardState extends State<StudentDashboard> {
       }
     }
   }
+
+  Future<void> _cacheAttendanceSchedulesAndNotifications() async {
+    try {
+      // Check if cache needs refresh (only cache once per hour or if no cache exists)
+      final needsRefresh = await _cacheService.needsCacheRefresh();
+      if (!needsRefresh) {
+        print('📦 Cache is up to date, skipping re-caching');
+        return;
+      }
+      
+      final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+      
+      if (courseProvider.upcomingClasses.isNotEmpty) {
+        // Cache the attendance schedules
+        await _cacheService.cacheAttendanceSchedules(courseProvider.upcomingClasses);
+        
+        print('✅ Cached ${courseProvider.upcomingClasses.length} classes');
+      }
+    } catch (e) {
+      print('❌ Error caching attendance schedules: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error caching attendance schedules: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _forceCacheAttendanceSchedules() async {
+    try {
+      final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+      
+      if (courseProvider.upcomingClasses.isNotEmpty) {
+        // Force cache the attendance schedules (ignore cache refresh check)
+        await _cacheService.cacheAttendanceSchedules(courseProvider.upcomingClasses);
+        
+        print('✅ Force cached ${courseProvider.upcomingClasses.length} classes');
+      }
+    } catch (e) {
+      print('❌ Error force caching attendance schedules: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error force caching attendance schedules: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
 
   Future<void> _handleSignOut() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -610,9 +674,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 );
               },
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
-            // Upcoming classes header
+            // Upcoming classes header with notification status
             Row(
               children: [
                 const Text(
@@ -623,14 +687,19 @@ class _StudentDashboardState extends State<StudentDashboard> {
                   ),
                 ),
                 const Spacer(),
-                if (_lastRefreshed != null)
-                  Text(
-                    'Updated ${_getTimeAgo(_lastRefreshed!)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (_lastRefreshed != null)
+                      Text(
+                        'Updated ${_getTimeAgo(_lastRefreshed!)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 12),

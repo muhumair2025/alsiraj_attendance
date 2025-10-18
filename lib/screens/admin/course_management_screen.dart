@@ -290,6 +290,15 @@ class _CourseManagementScreenState extends State<CourseManagementScreen> {
             }
           },
         ),
+        onTap: () {
+          // Navigate to classes screen when course card is tapped
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ClassManagementScreen(course: course),
+            ),
+          );
+        },
       ),
     );
   }

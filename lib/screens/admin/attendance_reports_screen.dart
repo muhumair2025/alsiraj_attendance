@@ -200,6 +200,157 @@ class _AttendanceReportsScreenState extends State<AttendanceReportsScreen> {
     }
   }
 
+  /// Build enhanced dropdown item for class selection (dropdown list)
+  Widget _buildClassDropdownItem(ClassModel classModel) {
+    final now = DateTime.now();
+    final isPast = classModel.endTime.isBefore(now);
+    final isUpcoming = classModel.startTime.isAfter(now);
+    
+    // Format date and time with 24-hour format and AM/PM
+    final dateFormat = DateFormat('MMM dd, yyyy');
+    final timeFormat = DateFormat('hh:mm a');
+    final dateStr = dateFormat.format(classModel.startTime);
+    final timeStr = '${timeFormat.format(classModel.startTime)} - ${timeFormat.format(classModel.endTime)}';
+    
+    // Determine status
+    String status;
+    Color statusColor;
+    if (isPast) {
+      status = 'Past Class';
+      statusColor = Colors.grey.shade600;
+    } else if (isUpcoming) {
+      status = 'Upcoming';
+      statusColor = Colors.blue.shade600;
+    } else {
+      status = 'In Progress';
+      statusColor = Colors.green.shade600;
+    }
+    
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.grey.shade300,
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Class name (main text)
+          Text(
+            classModel.className,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          // Date and time with status on the right
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Date and time (left side)
+              Expanded(
+                child: Text(
+                  '$dateStr • $timeStr',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Status (right side)
+              Text(
+                status,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: statusColor,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build selected class display (simplified for dropdown button)
+  Widget _buildSelectedClassDisplay(ClassModel classModel) {
+    final now = DateTime.now();
+    final isPast = classModel.endTime.isBefore(now);
+    final isUpcoming = classModel.startTime.isAfter(now);
+    
+    // Format date and time with 24-hour format and AM/PM
+    final dateFormat = DateFormat('MMM dd, yyyy');
+    final timeFormat = DateFormat('hh:mm a');
+    final dateStr = dateFormat.format(classModel.startTime);
+    final timeStr = '${timeFormat.format(classModel.startTime)} - ${timeFormat.format(classModel.endTime)}';
+    
+    // Determine status
+    String status;
+    Color statusColor;
+    if (isPast) {
+      status = 'Past';
+      statusColor = Colors.grey.shade600;
+    } else if (isUpcoming) {
+      status = 'Upcoming';
+      statusColor = Colors.blue.shade600;
+    } else {
+      status = 'Active';
+      statusColor = Colors.green.shade600;
+    }
+    
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Class name and date/time
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                classModel.className,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              Text(
+                '$dateStr • $timeStr',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade600,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+        // Status
+        Text(
+          status,
+          style: TextStyle(
+            fontSize: 10,
+            color: statusColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -276,10 +427,14 @@ class _AttendanceReportsScreenState extends State<AttendanceReportsScreen> {
                     filled: true,
                   ),
                   hint: const Text('Select a course'),
+                  isExpanded: true,
                   items: courses.map((course) {
                     return DropdownMenuItem(
                       value: course,
-                      child: Text(course.name),
+                      child: Text(
+                        course.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: (course) {
@@ -336,31 +491,41 @@ class _AttendanceReportsScreenState extends State<AttendanceReportsScreen> {
                     }
                   }
 
-                  return DropdownButtonFormField<ClassModel>(
-                    value: validSelectedClass,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.zero,
+                  return Container(
+                    height: 60, // Increased height to accommodate selected item content
+                    child: DropdownButtonFormField<ClassModel>(
+                      value: validSelectedClass,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.zero,
+                        ),
+                        filled: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
-                      filled: true,
+                      hint: const Text('Select a class'),
+                      isExpanded: true,
+                      selectedItemBuilder: (context) {
+                        return classes.map((classModel) {
+                          return _buildSelectedClassDisplay(classModel);
+                        }).toList();
+                      },
+                      items: classes.map((classModel) {
+                        return DropdownMenuItem(
+                          value: classModel,
+                          child: _buildClassDropdownItem(classModel),
+                        );
+                      }).toList(),
+                      onChanged: (classModel) {
+                        setState(() {
+                          selectedClass = classModel;
+                        });
+                        // Load attendance summary
+                        if (classModel != null) {
+                          Provider.of<AttendanceProvider>(context, listen: false)
+                              .loadAttendanceSummary(selectedCourse!.id, classModel.id);
+                        }
+                      },
                     ),
-                    hint: const Text('Select a class'),
-                    items: classes.map((classModel) {
-                      return DropdownMenuItem(
-                        value: classModel,
-                        child: Text(classModel.className),
-                      );
-                    }).toList(),
-                    onChanged: (classModel) {
-                      setState(() {
-                        selectedClass = classModel;
-                      });
-                      // Load attendance summary
-                      if (classModel != null) {
-                        Provider.of<AttendanceProvider>(context, listen: false)
-                            .loadAttendanceSummary(selectedCourse!.id, classModel.id);
-                      }
-                    },
                   );
                 },
               ),

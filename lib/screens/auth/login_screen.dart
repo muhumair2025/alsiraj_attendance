@@ -21,6 +21,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _saveCredentials = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
 
   @override
   void dispose() {
@@ -29,12 +36,29 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _loadSavedCredentials() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final credentials = await authProvider.getSavedCredentials();
+    
+    if (credentials['email'] != null) {
+      _emailController.text = credentials['email']!;
+      setState(() {
+        _saveCredentials = authProvider.saveCredentials;
+      });
+    }
+    
+    if (credentials['password'] != null) {
+      _passwordController.text = credentials['password']!;
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final success = await authProvider.signIn(
         _emailController.text.trim(),
         _passwordController.text,
+        shouldSaveCredentials: _saveCredentials,
       );
 
       if (mounted) {
@@ -53,6 +77,96 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       }
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final success = await authProvider.signInWithBiometric();
+
+    if (mounted) {
+      if (success) {
+        // Initialize notifications for the logged-in user
+        await NotificationService().initialize();
+        
+        // Navigate to appropriate dashboard based on role
+        _navigateToDashboard(authProvider);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.errorMessage ?? 'Biometric authentication failed'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showBiometricSetupDialog() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email and password first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final canEnable = await authProvider.canEnableBiometric();
+    if (!canEnable) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please set up biometric authentication in your device settings first'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Enable ${authProvider.biometricDisplayText} Login'),
+          content: Text(
+            'Would you like to enable ${authProvider.biometricDisplayText.toLowerCase()} authentication for quick login?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final success = await authProvider.enableBiometric(
+                  _emailController.text.trim(),
+                  _passwordController.text,
+                );
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success 
+                          ? '${authProvider.biometricDisplayText} authentication enabled successfully!'
+                          : 'Failed to enable ${authProvider.biometricDisplayText.toLowerCase()} authentication',
+                      ),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Enable'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -176,6 +290,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       return null;
                     },
                   ),
+                  const SizedBox(height: 16),
+
+                  // Save credentials checkbox
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _saveCredentials,
+                        onChanged: (value) {
+                          setState(() {
+                            _saveCredentials = value ?? false;
+                          });
+                        },
+                      ),
+                      const Expanded(
+                        child: Text(
+                          'Save credentials for next time',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
 
                   // Login button
@@ -190,6 +325,73 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
+
+                  // Biometric login section
+                  Consumer<AuthProvider>(
+                    builder: (context, authProvider, _) {
+                      if (!authProvider.biometricAvailable) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Column(
+                        children: [
+                          // Divider with "OR" text
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Biometric login button or setup button
+                          if (authProvider.biometricEnabled)
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: authProvider.isLoading ? null : _handleBiometricLogin,
+                                icon: const Icon(Icons.fingerprint, size: 24),
+                                label: Text(
+                                  'Sign in with ${authProvider.biometricDisplayText}',
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  side: BorderSide(color: Theme.of(context).primaryColor),
+                                  foregroundColor: Theme.of(context).primaryColor,
+                                ),
+                              ),
+                            )
+                          else
+                            SizedBox(
+                              width: double.infinity,
+                              child: TextButton.icon(
+                                onPressed: _showBiometricSetupDialog,
+                                icon: const Icon(Icons.fingerprint, size: 20),
+                                label: Text(
+                                  'Enable ${authProvider.biometricDisplayText} Login',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+                        ],
+                      );
+                    },
+                  ),
 
                   // Register link
                   Row(
