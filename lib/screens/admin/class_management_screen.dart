@@ -128,6 +128,8 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
     final zoomLinkController = TextEditingController();
     DateTime? selectedStartTime;
     DateTime? selectedEndTime;
+    bool isRecurring = false;
+    int recurringDays = 7;
 
     showDialog(
       context: context,
@@ -353,6 +355,97 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                               },
                             ),
                           ),
+                          const SizedBox(height: 24),
+                          
+                          // Recurring Class Options
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.zero,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Recurring Toggle
+                                CheckboxListTile(
+                                  title: const Text(
+                                    'Create Recurring Classes',
+                                    style: TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                  subtitle: const Text('Create the same class for multiple days'),
+                                  value: isRecurring,
+                                  onChanged: (value) {
+                                    setDialogState(() {
+                                      isRecurring = value ?? false;
+                                    });
+                                  },
+                                  activeColor: const Color(0xFF066330),
+                                ),
+                                
+                                // Recurring Days Selection
+                                if (isRecurring) ...[
+                                  const Divider(height: 1),
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Number of Days:',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            _buildRecurringOption(
+                                              context,
+                                              setDialogState,
+                                              7,
+                                              recurringDays,
+                                              (value) => recurringDays = value,
+                                              '7 Days',
+                                              '1 Week',
+                                            ),
+                                            const SizedBox(width: 12),
+                                            _buildRecurringOption(
+                                              context,
+                                              setDialogState,
+                                              15,
+                                              recurringDays,
+                                              (value) => recurringDays = value,
+                                              '15 Days',
+                                              '2 Weeks',
+                                            ),
+                                            const SizedBox(width: 12),
+                                            _buildRecurringOption(
+                                              context,
+                                              setDialogState,
+                                              30,
+                                              recurringDays,
+                                              (value) => recurringDays = value,
+                                              '30 Days',
+                                              '1 Month',
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Classes will be created from ${selectedStartTime != null ? DateFormat('MMM dd, yyyy').format(selectedStartTime!) : 'selected date'} for $recurringDays consecutive days',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -406,30 +499,43 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                                         return;
                                       }
                                       
-                                      final classId = await courseProvider.createClass(
-                                        courseId: widget.course.id,
-                                        className: classNameController.text.trim(),
-                                        zoomLink: zoomLinkController.text.trim(),
-                                        startTime: selectedStartTime!,
-                                        endTime: selectedEndTime!,
-                                      );
-
-                                      if (classId != null && mounted) {
-                                        // Schedule notification for students
-                                        await NotificationService().sendClassNotification(
+                                      if (isRecurring) {
+                                        // Create recurring classes
+                                        await _createRecurringClasses(
+                                          courseProvider,
+                                          classNameController.text.trim(),
+                                          zoomLinkController.text.trim(),
+                                          selectedStartTime!,
+                                          selectedEndTime!,
+                                          recurringDays,
+                                        );
+                                      } else {
+                                        // Create single class
+                                        final classId = await courseProvider.createClass(
                                           courseId: widget.course.id,
-                                          classId: classId,
-                                          courseName: widget.course.name,
+                                          className: classNameController.text.trim(),
+                                          zoomLink: zoomLinkController.text.trim(),
                                           startTime: selectedStartTime!,
+                                          endTime: selectedEndTime!,
                                         );
-                                        
-                                        Navigator.pop(context);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Class created and notification scheduled!'),
-                                            backgroundColor: Color(0xFF066330),
-                                          ),
-                                        );
+
+                                        if (classId != null && mounted) {
+                                          // Schedule notification for students
+                                          await NotificationService().sendClassNotification(
+                                            courseId: widget.course.id,
+                                            classId: classId,
+                                            courseName: widget.course.name,
+                                            startTime: selectedStartTime!,
+                                          );
+                                          
+                                          Navigator.pop(context);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Class created and notification scheduled!'),
+                                              backgroundColor: Color(0xFF066330),
+                                            ),
+                                          );
+                                        }
                                       }
                                     }
                                   },
@@ -459,6 +565,171 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Create recurring classes
+  Future<void> _createRecurringClasses(
+    CourseProvider courseProvider,
+    String className,
+    String zoomLink,
+    DateTime startTime,
+    DateTime endTime,
+    int days,
+  ) async {
+    int successCount = 0;
+    int totalClasses = days;
+    
+    // Show progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('Creating $totalClasses classes...'),
+            const SizedBox(height: 8),
+            Text('$successCount of $totalClasses completed'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      for (int i = 0; i < days; i++) {
+        // Calculate the date for this iteration
+        final currentDate = startTime.add(Duration(days: i));
+        
+        // Create new start and end times for this day
+        final dayStartTime = DateTime(
+          currentDate.year,
+          currentDate.month,
+          currentDate.day,
+          startTime.hour,
+          startTime.minute,
+        );
+        
+        final dayEndTime = DateTime(
+          currentDate.year,
+          currentDate.month,
+          currentDate.day,
+          endTime.hour,
+          endTime.minute,
+        );
+        
+        // Create the class
+        final classId = await courseProvider.createClass(
+          courseId: widget.course.id,
+          className: className,
+          zoomLink: zoomLink,
+          startTime: dayStartTime,
+          endTime: dayEndTime,
+        );
+        
+        if (classId != null) {
+          successCount++;
+          
+          // Schedule notification for the first class only
+          if (i == 0) {
+            await NotificationService().sendClassNotification(
+              courseId: widget.course.id,
+              classId: classId,
+              courseName: widget.course.name,
+              startTime: dayStartTime,
+            );
+          }
+        }
+        
+        // Update progress dialog
+        if (mounted) {
+          setState(() {});
+        }
+      }
+      
+      // Close progress dialog
+      if (mounted) {
+        Navigator.pop(context);
+        Navigator.pop(context); // Close create class dialog
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully created $successCount of $totalClasses classes!'),
+            backgroundColor: const Color(0xFF066330),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close progress dialog
+      if (mounted) {
+        Navigator.pop(context);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating classes: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Build recurring option button
+  Widget _buildRecurringOption(
+    BuildContext context,
+    StateSetter setDialogState,
+    int value,
+    int selectedValue,
+    Function(int) onChanged,
+    String title,
+    String subtitle,
+  ) {
+    final isSelected = selectedValue == value;
+    
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setDialogState(() {
+            onChanged(value);
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF066330).withOpacity(0.1) : Colors.grey.shade50,
+            border: Border.all(
+              color: isSelected ? const Color(0xFF066330) : Colors.grey.shade300,
+              width: isSelected ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.zero,
+          ),
+          child: Column(
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: isSelected ? const Color(0xFF066330) : Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isSelected ? const Color(0xFF066330) : Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
         ),
       ),
