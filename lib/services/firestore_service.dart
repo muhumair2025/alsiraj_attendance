@@ -3,6 +3,9 @@ import '../models/course_model.dart';
 import '../models/class_model.dart';
 import '../models/attendance_model.dart';
 import '../models/user_model.dart';
+import '../models/notice_board_model.dart';
+import '../models/fee_course_model.dart';
+import '../models/fee_payment_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -494,6 +497,299 @@ class FirestoreService {
                   'timestamp': doc.data()['timestamp'],
                 })
             .toList());
+  }
+
+  // ==================== NOTICE BOARD ====================
+
+  // Create notice
+  Future<String> createNotice({
+    required String message,
+    required NoticeType type,
+    required String createdBy,
+  }) async {
+    try {
+      final notice = NoticeBoardModel(
+        id: '', // Will be set by Firestore
+        message: message,
+        type: type,
+        createdAt: DateTime.now(),
+        createdBy: createdBy,
+        isActive: true,
+      );
+
+      final docRef = await _firestore.collection('notices').add(notice.toMap());
+      return docRef.id;
+    } catch (e) {
+      throw 'Error creating notice: $e';
+    }
+  }
+
+  // Get all notices
+  Future<List<NoticeBoardModel>> getNotices() async {
+    try {
+      final snapshot = await _firestore
+          .collection('notices')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => NoticeBoardModel.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      throw 'Error getting notices: $e';
+    }
+  }
+
+  // Get active notices stream (for real-time updates)
+  Stream<List<NoticeBoardModel>> getActiveNoticesStream() {
+    return _firestore
+        .collection('notices')
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => NoticeBoardModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
+
+  // Update notice
+  Future<void> updateNotice({
+    required String noticeId,
+    String? message,
+    NoticeType? type,
+    bool? isActive,
+  }) async {
+    try {
+      final updates = <String, dynamic>{};
+      
+      if (message != null) updates['message'] = message;
+      if (type != null) updates['type'] = type.name;
+      if (isActive != null) updates['isActive'] = isActive;
+
+      await _firestore.collection('notices').doc(noticeId).update(updates);
+    } catch (e) {
+      throw 'Error updating notice: $e';
+    }
+  }
+
+  // Delete notice
+  Future<void> deleteNotice(String noticeId) async {
+    try {
+      await _firestore.collection('notices').doc(noticeId).delete();
+    } catch (e) {
+      throw 'Error deleting notice: $e';
+    }
+  }
+
+  // ==================== FEE COURSES ====================
+
+  // Create fee course
+  Future<String> createFeeCourse(FeeCourseModel feeCourse) async {
+    try {
+      final docRef = await _firestore.collection('fee_courses').add(feeCourse.toMap());
+      return docRef.id;
+    } catch (e) {
+      throw 'Error creating fee course: $e';
+    }
+  }
+
+  // Get all fee courses
+  Stream<List<FeeCourseModel>> getFeeCourses() {
+    return _firestore
+        .collection('fee_courses')
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => FeeCourseModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
+
+  // Get fee course by ID
+  Future<FeeCourseModel?> getFeeCourseById(String feeCourseId) async {
+    try {
+      final doc = await _firestore.collection('fee_courses').doc(feeCourseId).get();
+      if (doc.exists) {
+        return FeeCourseModel.fromMap(doc.data()!, doc.id);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting fee course: $e');
+      return null;
+    }
+  }
+
+  // Update fee course
+  Future<void> updateFeeCourse(String feeCourseId, Map<String, dynamic> updates) async {
+    try {
+      await _firestore.collection('fee_courses').doc(feeCourseId).update(updates);
+    } catch (e) {
+      throw 'Error updating fee course: $e';
+    }
+  }
+
+  // Delete fee course (soft delete)
+  Future<void> deleteFeeCourse(String feeCourseId) async {
+    try {
+      await _firestore.collection('fee_courses').doc(feeCourseId).update({
+        'isActive': false,
+      });
+    } catch (e) {
+      throw 'Error deleting fee course: $e';
+    }
+  }
+
+  // ==================== FEE PAYMENTS ====================
+
+  // Submit fee payment
+  Future<String> submitFeePayment(FeePaymentModel payment) async {
+    try {
+      final docRef = await _firestore.collection('fee_payments').add(payment.toMap());
+      return docRef.id;
+    } catch (e) {
+      throw 'Error submitting fee payment: $e';
+    }
+  }
+
+  // Get all fee payments (for admin)
+  Stream<List<FeePaymentModel>> getAllFeePayments() {
+    return _firestore
+        .collection('fee_payments')
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => FeePaymentModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
+
+  // Get fee payments by status
+  Stream<List<FeePaymentModel>> getFeePaymentsByStatus(PaymentStatus status) {
+    return _firestore
+        .collection('fee_payments')
+        .where('status', isEqualTo: status.name)
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => FeePaymentModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
+
+  // Get fee payments by student
+  Stream<List<FeePaymentModel>> getFeePaymentsByStudent(String studentId) {
+    return _firestore
+        .collection('fee_payments')
+        .where('studentId', isEqualTo: studentId)
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => FeePaymentModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
+
+  // Update fee payment status (approve/reject)
+  Future<void> updateFeePaymentStatus({
+    required String paymentId,
+    required PaymentStatus status,
+    required String reviewedBy,
+    String? adminNotes,
+    String? rejectionReason,
+  }) async {
+    try {
+      final updates = {
+        'status': status.name,
+        'reviewedBy': reviewedBy,
+        'reviewedAt': DateTime.now().toIso8601String(),
+      };
+
+      if (adminNotes != null) {
+        updates['adminNotes'] = adminNotes;
+      }
+
+      if (rejectionReason != null) {
+        updates['rejectionReason'] = rejectionReason;
+      }
+
+      await _firestore.collection('fee_payments').doc(paymentId).update(updates);
+    } catch (e) {
+      throw 'Error updating fee payment status: $e';
+    }
+  }
+
+  // Check if student has already paid for a fee course
+  Future<bool> hasStudentPaidForFeeCourse(String studentId, String feeCourseId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('fee_payments')
+          .where('studentId', isEqualTo: studentId)
+          .where('feeCourseId', isEqualTo: feeCourseId)
+          .where('status', isEqualTo: PaymentStatus.approved.name)
+          .get();
+      
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      print('Error checking student payment: $e');
+      return false;
+    }
+  }
+
+  // Get fee payment by ID
+  Future<FeePaymentModel?> getFeePaymentById(String paymentId) async {
+    try {
+      final doc = await _firestore.collection('fee_payments').doc(paymentId).get();
+      if (doc.exists) {
+        return FeePaymentModel.fromMap(doc.data()!, doc.id);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting fee payment: $e');
+      return null;
+    }
+  }
+
+  // Get the last approved payment for a student and course
+  Future<FeePaymentModel?> getLastApprovedPayment({
+    required String studentId,
+    required String feeCourseId,
+  }) async {
+    try {
+      final snapshot = await _firestore
+          .collection('fee_payments')
+          .where('studentId', isEqualTo: studentId)
+          .where('feeCourseId', isEqualTo: feeCourseId)
+          .where('status', isEqualTo: PaymentStatus.approved.name)
+          .orderBy('reviewedAt', descending: true)
+          .limit(1)
+          .get();
+      
+      if (snapshot.docs.isNotEmpty) {
+        return FeePaymentModel.fromMap(snapshot.docs.first.data(), snapshot.docs.first.id);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting last approved payment: $e');
+      return null;
+    }
+  }
+
+  // Check if student has a pending payment for a course
+  Future<bool> hasPendingPaymentForCourse({
+    required String studentId,
+    required String feeCourseId,
+  }) async {
+    try {
+      final snapshot = await _firestore
+          .collection('fee_payments')
+          .where('studentId', isEqualTo: studentId)
+          .where('feeCourseId', isEqualTo: feeCourseId)
+          .where('status', isEqualTo: PaymentStatus.pending.name)
+          .limit(1)
+          .get();
+      
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      print('Error checking pending payment: $e');
+      return false;
+    }
   }
 }
 

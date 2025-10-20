@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Payment screenshots - allow authenticated users to upload and read
+    match /payment_screenshots/{fileName} {
+      // Any authenticated user can upload payment screenshots
+      // We'll handle business logic validation in Firestore rules
+      allow create, update: if isAuthenticated();
+      
+      // Any authenticated user can read payment screenshots
+      // Admin will see all, students will see their own via app logic
+      allow read: if isAuthenticated();
+      
+      // Only allow delete if the user is authenticated (admin can delete via app logic)
+      allow delete: if isAuthenticated();
+    }
+    
+    // Default rule - deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -9,6 +9,9 @@ import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/course_provider.dart';
 import 'providers/attendance_provider.dart';
+import 'providers/notice_board_provider.dart';
+import 'providers/fee_course_provider.dart';
+import 'providers/fee_payment_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/teacher/teacher_dashboard.dart';
@@ -62,6 +65,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CourseProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
+        ChangeNotifierProvider(create: (_) => NoticeBoardProvider()),
+        ChangeNotifierProvider(create: (_) => FeeCourseProvider()),
+        ChangeNotifierProvider(create: (_) => FeePaymentProvider()),
       ],
       child: MaterialApp(
         title: 'Al-Siraj Attendance',

@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/course_provider.dart';
+import '../../providers/notice_board_provider.dart';
 import '../auth/login_screen.dart';
 import '../common/profile_screen.dart';
 import 'course_management_screen.dart';
 import 'attendance_reports_screen.dart';
 import 'user_management_screen.dart';
+import 'notice_board_management_screen.dart';
+import 'fee_course_management_screen.dart';
+import 'fee_payment_management_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -21,6 +25,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CourseProvider>(context, listen: false).loadCourses();
+      Provider.of<NoticeBoardProvider>(context, listen: false).loadNotices();
     });
   }
 
@@ -162,6 +167,51 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const CourseManagementScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildActionCard(
+                  context,
+                  'Fee Courses',
+                  'Manage fee-based courses',
+                  Icons.monetization_on,
+                  const Color(0xFF066330),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const FeeCourseManagementScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildActionCard(
+                  context,
+                  'Fee Payments',
+                  'Review payment confirmations',
+                  Icons.payment,
+                  const Color(0xFFCA9A2D),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const FeePaymentManagementScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildActionCard(
+                  context,
+                  'Notice Board',
+                  'Create notices for students',
+                  Icons.notifications_active,
+                  const Color(0xFF066330),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NoticeBoardManagementScreen(),
                       ),
                     );
                   },

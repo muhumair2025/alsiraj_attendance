@@ -930,6 +930,18 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                     borderRadius: BorderRadius.zero,
                   ),
                   itemBuilder: (context) => [
+                    // Only show edit option for non-past classes
+                    if (!isPast)
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, color: Color(0xFF066330), size: 18),
+                            SizedBox(width: 8),
+                            Text('Edit Class', style: TextStyle(color: Color(0xFF066330))),
+                          ],
+                        ),
+                      ),
                     const PopupMenuItem(
                       value: 'delete',
                       child: Row(
@@ -942,7 +954,9 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
                     ),
                   ],
                   onSelected: (value) {
-                    if (value == 'delete') {
+                    if (value == 'edit') {
+                      _showEditClassDialog(classModel);
+                    } else if (value == 'delete') {
                       _showDeleteConfirmation(classModel);
                     }
                   },
@@ -950,6 +964,345 @@ class _ClassManagementScreenState extends State<ClassManagementScreen> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditClassDialog(ClassModel classModel) {
+    final formKey = GlobalKey<FormState>();
+    final classNameController = TextEditingController(text: classModel.className);
+    final zoomLinkController = TextEditingController(text: classModel.zoomLink);
+    DateTime? selectedStartTime = classModel.startTime;
+    DateTime? selectedEndTime = classModel.endTime;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+          ),
+          insetPadding: const EdgeInsets.symmetric(vertical: 40),
+          child: Container(
+            width: MediaQuery.of(context).size.width,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  color: const Color(0xFF066330),
+                  child: const Text(
+                    'Edit Class',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          CustomTextField(
+                            controller: classNameController,
+                            label: 'Class Name',
+                            hint: 'e.g., Lesson 1',
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter class name';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          CustomTextField(
+                            controller: zoomLinkController,
+                            label: 'Zoom Link (Optional)',
+                            hint: 'https://zoom.us/j/...',
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Start Time
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.zero,
+                            ),
+                            child: ListTile(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero,
+                              ),
+                              title: const Text(
+                                'Start Time',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                selectedStartTime != null
+                                    ? DateFormat('MMM dd, yyyy - hh:mm a').format(selectedStartTime!)
+                                    : 'Tap to select date and time',
+                                style: TextStyle(
+                                  color: selectedStartTime != null 
+                                      ? const Color(0xFF066330)
+                                      : Colors.grey,
+                                ),
+                              ),
+                              leading: Icon(
+                                Icons.calendar_today,
+                                color: const Color(0xFF066330),
+                              ),
+                              onTap: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedStartTime ?? DateTime.now(),
+                                  firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                                  builder: (context, child) {
+                                    return Theme(
+                                      data: Theme.of(context).copyWith(
+                                        colorScheme: const ColorScheme.light(
+                                          primary: Color(0xFF066330),
+                                        ),
+                                      ),
+                                      child: child!,
+                                    );
+                                  },
+                                );
+                                
+                                if (date != null && context.mounted) {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: selectedStartTime != null 
+                                        ? TimeOfDay.fromDateTime(selectedStartTime!)
+                                        : TimeOfDay.now(),
+                                    builder: (context, child) {
+                                      return Theme(
+                                        data: Theme.of(context).copyWith(
+                                          colorScheme: const ColorScheme.light(
+                                            primary: Color(0xFF066330),
+                                          ),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
+                                  );
+                                  
+                                  if (time != null) {
+                                    setDialogState(() {
+                                      selectedStartTime = DateTime(
+                                        date.year,
+                                        date.month,
+                                        date.day,
+                                        time.hour,
+                                        time.minute,
+                                      );
+                                    });
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // End Time
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.zero,
+                            ),
+                            child: ListTile(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero,
+                              ),
+                              title: const Text(
+                                'End Time',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                selectedEndTime != null
+                                    ? DateFormat('MMM dd, yyyy - hh:mm a').format(selectedEndTime!)
+                                    : 'Tap to select date and time',
+                                style: TextStyle(
+                                  color: selectedEndTime != null 
+                                      ? const Color(0xFF066330)
+                                      : Colors.grey,
+                                ),
+                              ),
+                              leading: Icon(
+                                Icons.calendar_today,
+                                color: const Color(0xFF066330),
+                              ),
+                              onTap: () async {
+                                if (selectedStartTime == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Please select start time first'),
+                                      backgroundColor: Color(0xFFCA9A2D),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedStartTime!,
+                                  firstDate: selectedStartTime!,
+                                  lastDate: selectedStartTime!.add(const Duration(days: 1)),
+                                  builder: (context, child) {
+                                    return Theme(
+                                      data: Theme.of(context).copyWith(
+                                        colorScheme: const ColorScheme.light(
+                                          primary: Color(0xFF066330),
+                                        ),
+                                      ),
+                                      child: child!,
+                                    );
+                                  },
+                                );
+                                
+                                if (date != null && context.mounted) {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: TimeOfDay.fromDateTime(
+                                      selectedStartTime!.add(const Duration(hours: 1)),
+                                    ),
+                                    builder: (context, child) {
+                                      return Theme(
+                                        data: Theme.of(context).copyWith(
+                                          colorScheme: const ColorScheme.light(
+                                            primary: Color(0xFF066330),
+                                          ),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
+                                  );
+                                  
+                                  if (time != null) {
+                                    setDialogState(() {
+                                      selectedEndTime = DateTime(
+                                        date.year,
+                                        date.month,
+                                        date.day,
+                                        time.hour,
+                                        time.minute,
+                                      );
+                                    });
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                
+                // Actions
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    border: Border(top: BorderSide(color: Colors.grey.shade300)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.zero,
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      Consumer<CourseProvider>(
+                        builder: (context, courseProvider, _) {
+                          return ElevatedButton(
+                            onPressed: courseProvider.isLoading
+                                ? null
+                                : () async {
+                                    if (formKey.currentState!.validate()) {
+                                      if (selectedStartTime == null || selectedEndTime == null) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Please select start and end times'),
+                                            backgroundColor: Color(0xFFCA9A2D),
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      
+                                      if (selectedEndTime!.isBefore(selectedStartTime!)) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('End time must be after start time'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      
+                                      // Update the class
+                                      final success = await courseProvider.updateClass(
+                                        courseId: widget.course.id,
+                                        classId: classModel.id,
+                                        className: classNameController.text.trim(),
+                                        zoomLink: zoomLinkController.text.trim(),
+                                        startTime: selectedStartTime!,
+                                        endTime: selectedEndTime!,
+                                      );
+
+                                      if (success && mounted) {
+                                        Navigator.pop(context);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Class updated successfully!'),
+                                            backgroundColor: Color(0xFF066330),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF066330),
+                              foregroundColor: Colors.white,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            ),
+                            child: courseProvider.isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Update Class'),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

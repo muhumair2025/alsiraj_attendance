@@ -117,6 +117,41 @@ class CourseProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateClass({
+    required String courseId,
+    required String classId,
+    required String className,
+    required String zoomLink,
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final classModel = ClassModel(
+        id: classId,
+        courseId: courseId,
+        className: className,
+        zoomLink: zoomLink,
+        startTime: startTime,
+        endTime: endTime,
+        createdAt: DateTime.now(), // Keep original creation time
+      );
+
+      await _firestoreService.updateClass(courseId, classId, classModel.toMap());
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> deleteClass(String courseId, String classId) async {
     try {
       await _firestoreService.deleteClass(courseId, classId);

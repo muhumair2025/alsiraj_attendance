@@ -107,6 +107,54 @@ service cloud.firestore {
       // Admin and teachers can read all attendance
       allow read: if isAdmin() || isTeacher();
     }
+    
+    // Notice Board collection
+    match /notices/{noticeId} {
+      // Anyone authenticated can read notices (for students to see active notices)
+      allow read: if isAuthenticated();
+      
+      // Only admin can create notices
+      allow create: if isAdmin();
+      
+      // Only admin can update notices
+      allow update: if isAdmin();
+      
+      // Only admin can delete notices
+      allow delete: if isAdmin();
+    }
+    
+    // Fee Courses collection
+    match /fee_courses/{feeCourseId} {
+      // Anyone authenticated can read fee courses (for students to see available courses)
+      allow read: if isAuthenticated();
+      
+      // Only admin can create fee courses
+      allow create: if isAdmin();
+      
+      // Only admin can update fee courses
+      allow update: if isAdmin();
+      
+      // Only admin can delete fee courses (soft delete by setting isActive to false)
+      allow delete: if isAdmin();
+    }
+    
+    // Fee Payments collection
+    match /fee_payments/{paymentId} {
+      // Admin can read all fee payments
+      allow read: if isAdmin();
+      
+      // Students can read their own fee payments
+      allow read: if isAuthenticated() && resource.data.studentId == request.auth.uid;
+      
+      // Students can create their own fee payment submissions
+      allow create: if isStudent() && request.resource.data.studentId == request.auth.uid;
+      
+      // Only admin can update fee payments (for approval/rejection)
+      allow update: if isAdmin();
+      
+      // Only admin can delete fee payments
+      allow delete: if isAdmin();
+    }
   }
 }
 
